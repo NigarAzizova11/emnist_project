@@ -1,0 +1,522 @@
+﻿<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Character Recognizer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: #2a2a3a;
+      --accent: #7c6af7;
+      --accent2: #f7c26a;
+      --text: #e8e8f0;
+      --muted: #5a5a7a;
+      --success: #6af7b4;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-y: auto;
+      padding: 24px 16px;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(124,106,247,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,106,247,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Glowing orb */
+    body::after {
+      content: '';
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(124,106,247,0.12) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px;
+      width: 420px;
+      max-width: 100%;
+      box-shadow: 0 0 60px rgba(124,106,247,0.08), 0 20px 40px rgba(0,0,0,0.4);
+    }
+
+    .header {
+      margin-bottom: 28px;
+    }
+
+    .tag {
+      display: inline-block;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(124,106,247,0.1);
+      border: 1px solid rgba(124,106,247,0.25);
+      border-radius: 100px;
+      padding: 4px 12px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--text);
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 6px;
+      font-weight: 400;
+    }
+
+    /* Canvas wrapper */
+    .canvas-wrapper {
+      position: relative;
+      margin: 24px 0;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1.5px solid var(--border);
+      background: #fff;
+      cursor: crosshair;
+      transition: border-color 0.2s;
+    }
+
+    .canvas-wrapper:hover {
+      border-color: var(--accent);
+    }
+
+    .canvas-wrapper.drawing {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(124,106,247,0.2);
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 260px;
+      touch-action: none;
+    }
+
+    /* Hint text on canvas */
+    .canvas-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .canvas-hint span {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: #bbb;
+      letter-spacing: 1px;
+      opacity: 0.5;
+    }
+
+    /* Controls */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    button {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-clear {
+      background: transparent;
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+    }
+
+    .btn-clear:hover {
+      border-color: var(--muted);
+      color: var(--text);
+    }
+
+    .btn-predict {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(124,106,247,0.35);
+    }
+
+    .btn-predict:hover {
+      background: #9182f9;
+      box-shadow: 0 6px 28px rgba(124,106,247,0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-predict:active {
+      transform: translateY(0);
+    }
+
+    .btn-predict.loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    /* Result area */
+    .result-area {
+      background: rgba(255,255,255,0.02);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 80px;
+      transition: all 0.3s;
+    }
+
+    .result-area.has-result {
+      border-color: rgba(124,106,247,0.4);
+      background: rgba(124,106,247,0.05);
+    }
+
+    .result-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .result-number {
+      font-size: 56px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--accent2);
+      transition: all 0.3s;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .result-number.empty {
+      color: var(--border);
+      font-size: 40px;
+    }
+
+    .confidence-bar-wrap {
+      margin-top: 8px;
+    }
+
+    .confidence-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .confidence-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 100px;
+      width: 0%;
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Brush size selector */
+    .brush-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .brush-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .brush-options {
+      display: flex;
+      gap: 8px;
+    }
+
+    .brush-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .brush-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(124,106,247,0.1);
+    }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.8); opacity: 0; }
+      60% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .result-number.pop { animation: pop 0.35s ease; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="tag">✦ EMNIST · Balanced · 62 Class</div>
+      <h1>Character <span>Recognizer</span></h1>
+      <p class="subtitle">Rəqəm (0–9) və ya hərf (A–Z, a–z) çək, model tanısın</p>
+    </div>
+
+    <div class="brush-row">
+      <span class="brush-label">Brush</span>
+      <div class="brush-options">
+        <button class="brush-btn" data-size="10" onclick="setBrush(10, this)">S</button>
+        <button class="brush-btn active" data-size="18" onclick="setBrush(18, this)">M</button>
+        <button class="brush-btn" data-size="28" onclick="setBrush(28, this)">L</button>
+      </div>
+    </div>
+
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <canvas id="canvas"></canvas>
+      <div class="canvas-hint" id="hint"><span>Rəqəm və ya hərf çək →</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-clear" onclick="clearCanvas()">↺ Sil</button>
+      <button class="btn-predict" id="predictBtn" onclick="predict()">Tanı</button>
+    </div>
+
+    <div class="result-area" id="resultArea">
+      <div>
+        <div class="result-label">Nəticə</div>
+        <div id="charType" style="font-family:'Space Mono',monospace; font-size:10px; color:var(--accent); margin-top:4px; letter-spacing:1px;"></div>
+        <div class="confidence-bar-wrap" id="confWrap" style="display:none; margin-top:8px; width:140px;">
+          <div class="confidence-label">
+            <span>Ehtimal</span>
+            <span id="confText">—</span>
+          </div>
+          <div class="confidence-bar"><div class="confidence-fill" id="confFill"></div></div>
+        </div>
+      </div>
+      <div class="result-number empty" id="resultNum">—</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('canvasWrapper');
+    const hint = document.getElementById('hint');
+
+    // Set canvas resolution
+    function resizeCanvas() {
+      const rect = wrapper.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = 260;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    }
+    resizeCanvas();
+
+    let drawing = false;
+    let brushSize = 18;
+    let lastX = 0, lastY = 0;
+    let hasDrawn = false;
+
+    function setBrush(size, el) {
+      brushSize = size;
+      document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      if (e.touches) {
+        return {
+          x: (e.touches[0].clientX - rect.left) * (canvas.width / rect.width),
+          y: (e.touches[0].clientY - rect.top) * (canvas.height / rect.height)
+        };
+      }
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    canvas.addEventListener('mousedown', e => {
+      drawing = true;
+      const pos = getPos(e);
+      lastX = pos.x; lastY = pos.y;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#000';
+      ctx.fill();
+      if (!hasDrawn) { hasDrawn = true; hint.style.opacity = '0'; }
+      wrapper.classList.add('drawing');
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if (!drawing) return;
+      const pos = getPos(e);
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      lastX = pos.x; lastY = pos.y;
+    });
+
+    canvas.addEventListener('mouseup', () => { drawing = false; wrapper.classList.remove('drawing'); });
+    canvas.addEventListener('mouseleave', () => { drawing = false; wrapper.classList.remove('drawing'); });
+
+    // Touch support
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); canvas.dispatchEvent(new MouseEvent('mousedown', {clientX: e.touches[0].clientX, clientY: e.touches[0].clientY})); }, {passive:false});
+    canvas.addEventListener('touchmove', e => { e.preventDefault(); canvas.dispatchEvent(new MouseEvent('mousemove', {clientX: e.touches[0].clientX, clientY: e.touches[0].clientY})); }, {passive:false});
+    canvas.addEventListener('touchend', e => { e.preventDefault(); drawing = false; }, {passive:false});
+
+    function clearCanvas() {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      hasDrawn = false;
+      hint.style.opacity = '1';
+      document.getElementById('resultNum').textContent = '—';
+      document.getElementById('resultNum').className = 'result-number empty';
+      document.getElementById('resultArea').classList.remove('has-result');
+      document.getElementById('confWrap').style.display = 'none';
+      document.getElementById('charType').textContent = '';
+    }
+
+    function predict() {
+      if (!hasDrawn) return;
+      const btn = document.getElementById('predictBtn');
+      btn.innerHTML = '<span class="spinner"></span>Analiz...';
+      btn.classList.add('loading');
+
+      const dataURL = canvas.toDataURL('image/png');
+      fetch('/predict', {
+        method: 'POST',
+        body: JSON.stringify({ image: dataURL }),
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(res => res.json())
+      .then(data => {
+        const numEl = document.getElementById('resultNum');
+        numEl.textContent = data.result;
+        numEl.className = 'result-number pop';
+        document.getElementById('resultArea').classList.add('has-result');
+
+        // Show character type
+        const r = data.result;
+        const typeEl = document.getElementById('charType');
+        if (/^[0-9]$/.test(r)) typeEl.textContent = '▸ Rəqəm';
+        else if (/^[A-Z]$/.test(r)) typeEl.textContent = '▸ Böyük hərf';
+        else if (/^[a-z]$/.test(r)) typeEl.textContent = '▸ Kiçik hərf';
+        else typeEl.textContent = '';
+
+        // Confidence bar
+        const conf = data.confidence || 0;
+        document.getElementById('confWrap').style.display = 'block';
+        document.getElementById('confText').textContent = conf.toFixed(1) + '%';
+        setTimeout(() => {
+          document.getElementById('confFill').style.width = conf + '%';
+        }, 50);
+
+        btn.innerHTML = 'Tanı';
+        btn.classList.remove('loading');
+      })
+      .catch(() => {
+        btn.innerHTML = 'Tanı';
+        btn.classList.remove('loading');
+      });
+    }
+  </script>
+</body>
+</html>
