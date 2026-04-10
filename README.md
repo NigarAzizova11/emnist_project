@@ -17,8 +17,9 @@ This project is a web-based application that recognizes handwritten digits and l
 - Pillow (PIL)
 - HTML, CSS, JavaScript
 
-
-
+## 📸 Preview
+ ### Prediction Result
+![Result](Screenshot.png)
 ## ⚙️ Installation
 
 1. Clone the repository:
@@ -26,9 +27,16 @@ This project is a web-based application that recognizes handwritten digits and l
 ```bash
 git clone https://github.com/NigarAzizova11/emnist-project.git
 cd emnist-project
+
 2.Install dependencies:
+
 pip install -r requirements.txt
-3.Run the app:
+
+3.run the app:
 python app.py
-4. open in browser:
+
+4.open in browser:
 http://127.0.0.1:5000/
+
+
+
